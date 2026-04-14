@@ -155,7 +155,7 @@ I wake up around 6:30, drink coffee while reading...
 - Contradictions — where stated beliefs and actual behavior diverge (experts latch onto these)
 - Depth over breadth — 60-90 min conversation is better than a wide survey
 
-See `transcripts/` for synthetic samples demonstrating the expected format.
+Place your own transcripts in `transcripts/`. The directory is tracked so you can commit synthetic samples alongside the code if you want them to ship with the repo.
 
 ## Directory Layout
 
@@ -169,13 +169,14 @@ simic/
 ├── serve.py                    # Stage 4: FastAPI over memory files (Approach A runtime)
 ├── prompts/
 │   └── category_taxonomy_template.json  # 25-category structural template (bridge fills it in)
-├── transcripts/                # Synthetic sample transcripts (sealed, tracked)
-├── memory/                     # Generated agent memories (gitignored)
-├── agent_configs/              # Per-agent bridge output (gitignored)
-├── db/                         # Per-agent stage 3 progress + raw batches (gitignored)
-├── output/                     # Per-agent stage 3 final JSONL (gitignored)
+├── transcripts/                # User-provided transcripts (tracked — place samples here)
+├── memory/                     # Generated agent memories (gitignored, created at runtime)
+├── agent_configs/              # Per-agent bridge output (gitignored, created at runtime)
+├── db/                         # Per-agent stage 3 progress + raw batches (gitignored, created at runtime)
+├── output/                     # Per-agent stage 3 final JSONL (gitignored, created at runtime)
 ├── requirements.txt
 ├── .env.example
+├── LICENSE
 └── docs/
     └── RESEARCH.md             # Methodology writeup + why this direction was paused
 ```
