@@ -186,7 +186,7 @@ See `docs/RESEARCH.md` for the methodology deep-dive: what the two approaches ar
 
 ## License
 
-[TODO — add LICENSE file before going public]
+MIT — see [LICENSE](LICENSE).
 
 ## Credits
 
