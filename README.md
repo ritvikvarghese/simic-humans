@@ -203,13 +203,12 @@ simic/
 ├── requirements.txt
 ├── .env.example
 ├── LICENSE
-└── docs/
-    └── RESEARCH.md             # Methodology writeup + why this direction was paused
+└── RESEARCH.md                 # Methodology writeup + why this direction was paused
 ```
 
 ## Research Context
 
-See `docs/RESEARCH.md` for the methodology deep-dive: what the two approaches are trying to prove, what we learned, and why this direction is being paused.
+See [RESEARCH.md](RESEARCH.md) for the methodology deep-dive: what the two approaches are trying to prove, what we learned, and why this direction is being paused.
 
 ## License
 

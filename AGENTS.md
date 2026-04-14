@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Shared rules for any agent (Claude Code, Codex, etc.) working in this repo. For humans, start with [README.md](README.md). For research context, see [docs/RESEARCH.md](docs/RESEARCH.md).
+Shared rules for any agent (Claude Code, Codex, etc.) working in this repo. For humans, start with [README.md](README.md). For research context, see [RESEARCH.md](RESEARCH.md).
 
 ## What this is
 
