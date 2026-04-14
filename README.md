@@ -10,13 +10,13 @@ Both approaches take the same input (a transcript) and share Stage 1. You choose
 
 ## The Two Approaches
 
-### Approach A — prompt + memory (simagents)
+### Approach A — prompt + memory file
 - **Stage 1 only.** Four expert personas (psychologist, consumer behavior, cultural-demographic, social network) analyze the transcript in parallel. Their observations are compressed into a system prompt and packaged with the transcript into a single memory file. `serve.py` loads memory files and exposes a FastAPI endpoint that sends `{system: memory_file, user: question}` to Claude.
 - **Cost:** ~6 API calls per agent, ~1 minute, a few cents.
 - **Strength:** easy to iterate, voice fidelity preserved, works zero-shot on any transcript.
 - **Weakness:** context tax on every query, limited by the memory file quality, model is still Claude playing a role.
 
-### Approach B — fine-tune (simic-finetuned)
+### Approach B — fine-tune on synthetic Q&A
 - **Stages 1 + 2 + 3.** After genesis, a bridge script derives per-person fine-tune configs (system prompt, frontier inference prompt, 25-category generation taxonomy) from the memory file. A generator model (default: GLM-4.6 via Z.AI) then produces ~2,600 Q&A pairs across 25 behavioral categories. The output is an OpenAI-chat-format JSONL ready for fine-tuning.
 - **Cost:** ~2,600+ API calls per agent, hours, dollars.
 - **Strength:** no context tax at inference, voice baked into the weights, runs on your own infra.
@@ -194,6 +194,6 @@ See `docs/RESEARCH.md` for the methodology deep-dive: what the two approaches ar
 
 ## Credits
 
-Simic combines two prior projects by @ritvikvarghese into a unified pipeline:
-- `simagents` — the prompt-engineered approach
-- `simic-finetuned` — the fine-tune data generation approach
+Simic unifies two prior research projects into a single pipeline:
+- the prompt-engineered memory-file approach (Stage 1)
+- the synthetic fine-tune dataset approach (Stages 2 + 3)

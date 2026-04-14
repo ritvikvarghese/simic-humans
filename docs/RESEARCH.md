@@ -73,7 +73,7 @@ Hypothesized tradeoffs:
 | Iteration speed | Fast — edit prompt, re-run | Slow — retrain to change anything |
 | Works for N agents | Linear — just load more memory files | Linear — train N models |
 
-The fair comparison runs the fine-tuned model and the prompt+memory model against the same battery of questions and a blind human rater (or the real person). That comparison is what the `testapp/` folder in `simic-finetuned` was designed for — it wasn't ported into this unified repo because it had Mongo + RunPod dependencies that don't generalize, but the eval harness is the missing piece of this research.
+The fair comparison runs the fine-tuned model and the prompt+memory model against the same battery of questions and a blind human rater (or the real person). That comparison is the missing piece of this research — an eval harness that served a side-by-side chat UI against both a hosted fine-tuned model and a frontier baseline — and was dropped from this unified pipeline because its infrastructure assumptions (hosted fine-tune endpoint, MongoDB, reverse proxy) didn't generalize.
 
 ## What worked
 
@@ -86,7 +86,7 @@ The fair comparison runs the fine-tuned model and the prompt+memory model agains
 
 [TODO — rivar fills in]
 
-- The fine-tune pipeline's 25-category taxonomy was originally hardcoded to one person. Making it person-agnostic (via the bridge) was a late realization — the first version of simic-finetuned only worked for its author.
+- The fine-tune pipeline's 25-category taxonomy was originally hardcoded to one person. Making it person-agnostic (via the bridge) was a late realization — the first version of the fine-tune pipeline only worked for its author.
 - ...
 
 ## Why this direction is being paused
@@ -106,8 +106,8 @@ Possible next steps if someone picked this up:
 ## Credits & Inspiration
 
 - The 4-expert pattern was inspired by [cite if applicable — or just list prior art in qualitative research and agent design]
-- The 25-category taxonomy was developed iteratively during simic-finetuned
+- The 25-category taxonomy was developed iteratively during the fine-tune-data experiments
 
 ---
 
-*Simic is a research artifact by @ritvikvarghese. Not maintained. Open-sourced as a reference implementation.*
+*Simic is a research artifact. Not maintained. Open-sourced as a reference implementation.*

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "1.0",
-    "description": "Per-category taxonomy template for simic-finetuned stage 3. Stable fields only. Bridge (stage 2) fills in behavioral_anchors and prompt per-person from the memory file.",
+    "description": "Per-category taxonomy template for Stage 3 (fine-tune data generation). Stable fields only. Bridge (Stage 2) fills in behavioral_anchors and prompt per-person from the memory file.",
     "generation_batch_size": 10,
     "recommended_temperature": 0.85,
     "output_format": "jsonl",
