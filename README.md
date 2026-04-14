@@ -1,5 +1,7 @@
 # Simic
 
+Can an AI agent convincingly replicate a specific real person? Simic is a multi-agent research project to see if it can be used to predict human choice and decisions for market research. 
+
 Two methodologies for replicating a specific person as an AI agent — unified pipeline.
 
 Given an interview transcript of a real human, Simic produces either:
