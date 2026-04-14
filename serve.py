@@ -1,7 +1,7 @@
 """Simic API — serves pre-generated agent memory files as callable agents.
 
 Loads memory files from memory/ at startup, exposes REST + SSE endpoints
-for querying agents individually or all in parallel via Claude API.
+for querying agents individually or all in parallel via the Claude API.
 
 Usage:
     uvicorn serve:app --reload
@@ -25,7 +25,6 @@ import yaml
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
-from uuid import uuid4
 
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
@@ -33,8 +32,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-
-import history
 
 # ---------------------------------------------------------------------------
 # Config
@@ -45,35 +42,16 @@ MEMORY_DIR = Path("memory")
 MAX_CONCURRENT = 25
 QUERY_TIMEOUT = 60.0
 
-FORMAT_PRESETS = {
-    "brief": (
-        "Answer in 2-3 sentences. Be direct, no preamble. "
-        "Write in plain text only — no markdown, no headers, no bullet points, no bold or italic."
-    ),
-    "detailed": (
-        "Think through your answer thoroughly. Show your reasoning and reference "
-        "specific experiences, amounts, and people from your life. "
-        "Write in plain text only — no markdown, no headers, no bullet points, no bold or italic. "
-        "Speak naturally in your own voice, as if talking to a friend."
-    ),
-    "structured": (
-        "Answer with three parts:\n"
-        "1) Your immediate gut reaction (one sentence)\n"
-        "2) Your reasoning — reference specific experiences from your life (2-3 sentences)\n"
-        "3) Your final answer (one sentence)\n\n"
-        "Write in plain text only — no markdown, no headers, no bold or italic."
-    ),
-    "quantitative": (
-        "Answer with a number first, using whatever scale the question implies "
-        "(percentage, 1-10, etc.). Then state your confidence (low/medium/high) "
-        "based on how much direct evidence from your actual life supports this answer. "
-        "Then one sentence explaining why. Keep it to 2-3 lines total.\n\n"
-        "Format:\n"
-        "SCORE: [number]\n"
-        "CONFIDENCE: [low/medium/high]\n"
-        "REASON: [one sentence]"
-    ),
-}
+BRIEF_INSTRUCTION = (
+    "Answer in 2-3 sentences. Be direct, no preamble. "
+    "Write in plain text only — no markdown, no headers, no bullet points, no bold or italic."
+)
+
+SCENARIO_GUARD = (
+    "Important: If the question mentions unnamed people ('a friend', 'your partner', "
+    "'someone you trust', 'a colleague'), treat them as generic — do not assume they are "
+    "a specific person from your life unless explicitly named."
+)
 
 load_dotenv()
 
@@ -128,33 +106,12 @@ def build_profile(agent_id: str, frontmatter: dict) -> dict:
     return profile
 
 
-def extract_profile_regex(memory_text: str, agent_id: str) -> dict:
-    profile = {"agent_id": agent_id, "name": agent_id, "summary": ""}
-    match = re.search(
-        r"You are ([A-Z][a-z]+(?: [A-Z][a-z]+)+),\s+(\d{1,2}) years? old,\s+(?:a |an )?([^,]+?)(?:\s+at\s+([^,]+))?\s+in\s+([^,\.]+)",
-        memory_text[:600],
-    )
-    if match:
-        profile["name"] = match.group(1)
-        age = match.group(2)
-        job = match.group(3).strip()
-        city = match.group(5).strip()
-        profile["summary"] = f"{age}, {job}, {city}"
-    else:
-        match2 = re.search(
-            r"You are ([A-Z][a-z]+(?: [A-Z][a-z]+)+),?\s+(?:a |an )?(\d{1,2})-year-old\s+([^,\.]+?)(?:\s+from\s+([^,\.]+?))?(?:\s+(?:now\s+)?(?:living|based|working)\s+in\s+([^,\.]+))?(?:\.|,)",
-            memory_text[:600],
-        )
-        if match2:
-            profile["name"] = match2.group(1)
-            age = match2.group(2)
-            job = match2.group(3).strip()
-            city = match2.group(5).strip() if match2.group(5) else (match2.group(4).strip() if match2.group(4) else "")
-            profile["summary"] = f"{age}, {job}" + (f", {city}" if city else "")
-    return profile
-
-
 def load_memory_files() -> dict[str, dict]:
+    """Scan memory/ and parse all agent memory files.
+
+    Memory files must have YAML frontmatter (produced by genesis.py). Files
+    without frontmatter are skipped with a warning.
+    """
     agents = {}
     if not MEMORY_DIR.exists():
         log.warning("memory/ directory not found")
@@ -171,27 +128,19 @@ def load_memory_files() -> dict[str, dict]:
         if agent_id not in candidates or date_str > candidates[agent_id][0]:
             candidates[agent_id] = (date_str, path)
 
-    for agent_id, (date_str, path) in candidates.items():
+    for agent_id, (_date_str, path) in candidates.items():
         text = path.read_text(encoding="utf-8")
         frontmatter, text_without_fm = parse_frontmatter(text)
+        if not frontmatter:
+            log.warning(f"Skipping {path.name}: no YAML frontmatter. Re-run genesis.py to regenerate.")
+            continue
 
         marker = "# System Prompt"
         idx = text_without_fm.find(marker)
-        if idx == -1:
-            memory = text_without_fm
-        else:
-            memory = text_without_fm[idx:]
+        memory = text_without_fm[idx:] if idx != -1 else text_without_fm
 
-        if frontmatter:
-            profile = build_profile(agent_id, frontmatter)
-        else:
-            log.warning(f"{path.name}: no YAML frontmatter, falling back to regex extraction")
-            profile = extract_profile_regex(memory, agent_id)
-
-        agents[agent_id] = {
-            "memory": memory,
-            "profile": profile,
-        }
+        profile = build_profile(agent_id, frontmatter)
+        agents[agent_id] = {"memory": memory, "profile": profile}
         log.info(f"Loaded {agent_id}: {profile.get('name', agent_id)} ({len(memory):,} chars)")
 
     log.info(f"Total agents loaded: {len(agents)}")
@@ -204,22 +153,20 @@ def load_memory_files() -> dict[str, dict]:
 
 client: Optional[AsyncAnthropic] = None
 semaphore: Optional[asyncio.Semaphore] = None
-db: Optional[history.aiosqlite.Connection] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global AGENTS, client, semaphore, db
+    global AGENTS, client, semaphore
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         log.error("ANTHROPIC_API_KEY not set — queries will fail")
     client = AsyncAnthropic(max_retries=2)
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
-    db = await history.init_db()
     AGENTS = load_memory_files()
     yield
-    await client.close()
-    await db.close()
+    if client is not None:
+        await client.close()
 
 
 app = FastAPI(title="Simic API", version="1.0.0", lifespan=lifespan)
@@ -245,7 +192,6 @@ def check_auth(request: Request):
 class QueryRequest(BaseModel):
     query: str = Field(..., max_length=10000)
     agent_ids: Optional[list[str]] = None
-    format: str = "brief"
 
 
 @app.get("/health")
@@ -266,16 +212,7 @@ async def get_agent(agent_id: str):
     agent = AGENTS.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
-    system_prompt = agent["memory"].split("\n---\n")[0] if "\n---\n" in agent["memory"] else agent["memory"][:2000]
-    return {
-        **agent["profile"],
-        "system_prompt": system_prompt,
-    }
-
-
-@app.get("/formats")
-async def list_formats():
-    return FORMAT_PRESETS
+    return agent["profile"]
 
 
 @app.post("/query")
@@ -285,19 +222,7 @@ async def query_agents(req: QueryRequest, request: Request):
     if not AGENTS:
         raise HTTPException(status_code=503, detail="No agents loaded")
 
-    if req.format not in FORMAT_PRESETS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown format '{req.format}'. Available: {list(FORMAT_PRESETS.keys())}",
-        )
-
-    format_instruction = FORMAT_PRESETS[req.format]
-    scenario_guard = (
-        "Important: If the question mentions unnamed people ('a friend', 'your partner', "
-        "'someone you trust', 'a colleague'), treat them as generic — do not assume they are "
-        "a specific person from your life unless explicitly named."
-    )
-    user_message = f"{format_instruction}\n\n{scenario_guard}\n\n{req.query}"
+    user_message = f"{BRIEF_INSTRUCTION}\n\n{SCENARIO_GUARD}\n\n{req.query}"
 
     if req.agent_ids:
         missing = [aid for aid in req.agent_ids if aid not in AGENTS]
@@ -350,7 +275,7 @@ async def query_agents(req: QueryRequest, request: Request):
                 }
             except Exception as e:
                 latency = int((time.monotonic() - t0) * 1000)
-                log.error(f"  {agent_id} failed: {e}")
+                log.exception(f"  {agent_id} failed: {e}")
                 return {
                     "agent_id": agent_id,
                     "name": agent_data["profile"]["name"],
@@ -360,17 +285,10 @@ async def query_agents(req: QueryRequest, request: Request):
                     "latency_ms": latency,
                 }
 
-    query_id = str(uuid4())
-
-    async def _save_history(db, qid, query_text, fmt, agent_ids, results):
-        await history.save_query(db, qid, query_text, fmt, agent_ids)
-        await history.save_responses(db, qid, results, SONNET)
-
     async def event_stream():
         tasks = [asyncio.create_task(run_one(aid, adata)) for aid, adata in targets.items()]
         succeeded = 0
         failed = 0
-        all_results = []
 
         for coro in asyncio.as_completed(tasks):
             result = await coro
@@ -378,18 +296,10 @@ async def query_agents(req: QueryRequest, request: Request):
                 succeeded += 1
             else:
                 failed += 1
-            all_results.append(result)
             yield f"event: agent_response\ndata: {json.dumps(result)}\n\n"
 
         summary = {"total": len(targets), "succeeded": succeeded, "failed": failed}
         yield f"event: done\ndata: {json.dumps(summary)}\n\n"
-
-        try:
-            await asyncio.shield(
-                _save_history(db, query_id, req.query, req.format, req.agent_ids, all_results)
-            )
-        except Exception as e:
-            log.error(f"Failed to save history: {type(e).__name__}")
 
     return StreamingResponse(
         event_stream(),

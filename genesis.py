@@ -36,18 +36,17 @@ from expert_prompts import (
 )
 
 SONNET = "claude-sonnet-4-5"
+AGENT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
-# ---------------------------------------------------------------------------
-# File helpers
-# ---------------------------------------------------------------------------
-
-def _backup_if_exists(path: Path) -> None:
-    """Rename existing file to .prev.md to avoid silent overwrite."""
-    if path.exists():
-        backup = path.with_suffix(".prev.md")
-        path.rename(backup)
-        print(f"  Previous output backed up to {backup}")
+def validate_agent_id(agent_id: str) -> None:
+    if not AGENT_ID_RE.match(agent_id):
+        print(
+            f"Error: agent_id '{agent_id}' is invalid. "
+            f"Allowed characters: letters, digits, underscore, hyphen.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -261,51 +260,6 @@ def count_observations(text: str) -> int:
     return len(re.findall(r"^\d+\.\s", text, re.MULTILINE))
 
 
-def assemble_notes(agent_id: str, expert_results: list, gaps_result: dict | None,
-                   cache_result: dict | None, source_path: str, today: str) -> str:
-    parts = []
-    expert_names = [r["name"] for r in expert_results if r["text"]]
-    failed_names = [r["name"] for r in expert_results if not r["text"]]
-    total_obs = sum(count_observations(r["text"]) for r in expert_results)
-    total_in = sum(r["tokens_in"] for r in expert_results)
-    total_out = sum(r["tokens_out"] for r in expert_results)
-
-    for r in [gaps_result, cache_result]:
-        if r:
-            total_in += r["tokens_in"]
-            total_out += r["tokens_out"]
-
-    parts.append(f"# Agent Notes — {agent_id}\n")
-    parts.append(f"Generated: {today}")
-    parts.append(f"Source: {source_path}")
-    parts.append(f"Model: {SONNET}")
-    parts.append(f"Experts: {', '.join(expert_names)}")
-    parts.append(f"Observations: {total_obs}")
-    parts.append(f"Tokens: {total_in:,} in / {total_out:,} out")
-    if failed_names:
-        parts.append(f"WARNING: Failed experts: {', '.join(failed_names)}")
-    parts.append("\n---\n")
-
-    for result in expert_results:
-        if not result["text"]:
-            continue
-        parts.append(f"## {result['name']}\n")
-        parts.append(result["text"])
-        parts.append("\n---\n")
-
-    if gaps_result and gaps_result["text"]:
-        parts.append("## Coverage Gaps & Conflicts\n")
-        parts.append(gaps_result["text"])
-        parts.append("\n---\n")
-
-    if cache_result and cache_result["text"]:
-        parts.append("## Summary Cache (System Prompt)\n")
-        parts.append(cache_result["text"])
-        parts.append("")
-
-    return "\n".join(parts)
-
-
 def assemble_memory(agent_id: str, body: str, expert_results: list,
                     gaps_result: dict | None, cache_result: dict | None,
                     today: str, demographics: dict | None = None) -> str:
@@ -358,6 +312,7 @@ def assemble_memory(agent_id: str, body: str, expert_results: list,
 def run_genesis(transcript_path: Path, agent_id: str, skip_gaps: bool = False,
                 skip_cache: bool = False, dry_run: bool = False) -> Path | None:
     """Run the genesis pipeline. Returns path to memory file on success."""
+    validate_agent_id(agent_id)
     body = parse_transcript(transcript_path)
     demographics = parse_demographics(body)
 
@@ -421,17 +376,9 @@ def run_genesis(transcript_path: Path, agent_id: str, skip_gaps: bool = False,
     elapsed = time.time() - pipeline_start
     print(f"\nDone in {elapsed:.0f}s — {total_obs} observations")
 
-    notes_path = Path("expert_notes") / f"{agent_id}_{today}_notes.md"
-    notes_path.parent.mkdir(exist_ok=True)
-    notes = assemble_notes(agent_id, expert_results, gaps_result, cache_result, str(transcript_path), today)
-    _backup_if_exists(notes_path)
-    notes_path.write_text(notes, encoding="utf-8")
-    print(f"Notes: {notes_path}")
-
     memory_path = Path("memory") / f"{agent_id}_{today}_memory.md"
     memory_path.parent.mkdir(exist_ok=True)
     memory = assemble_memory(agent_id, body, expert_results, gaps_result, cache_result, today, demographics)
-    _backup_if_exists(memory_path)
     memory_path.write_text(memory, encoding="utf-8")
     print(f"Memory: {memory_path}")
 

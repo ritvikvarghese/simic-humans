@@ -122,11 +122,9 @@ curl -X POST localhost:8000/query \
   -H 'Content-Type: application/json' \
   -d '{"query": "How do you decide what to eat?", "agent_ids": ["alex"]}'
 
-# With format preset (brief | detailed | structured | quantitative)
-curl -X POST localhost:8000/query \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "Rate how much you trust social media ads 1-10", "format": "quantitative"}'
 ```
+
+Responses are brief (2-3 sentences, plain text) by design. For longer or structured answers, edit `serve.py`'s `BRIEF_INSTRUCTION` — the format-preset machinery was removed as speculative.
 
 ## Transcript Format
 
@@ -169,12 +167,10 @@ simic/
 ├── bridge.py                   # Stage 2: memory file → per-agent fine-tune configs
 ├── generate.py                 # Stage 3: configs → JSONL fine-tune data (resumable, parallel)
 ├── serve.py                    # Stage 4: FastAPI over memory files (Approach A runtime)
-├── history.py                  # Query history SQLite store
 ├── prompts/
 │   └── category_taxonomy_template.json  # 25-category structural template (bridge fills it in)
 ├── transcripts/                # Synthetic sample transcripts (sealed, tracked)
 ├── memory/                     # Generated agent memories (gitignored)
-├── expert_notes/               # Debug: raw expert observations (gitignored)
 ├── agent_configs/              # Per-agent bridge output (gitignored)
 ├── db/                         # Per-agent stage 3 progress + raw batches (gitignored)
 ├── output/                     # Per-agent stage 3 final JSONL (gitignored)

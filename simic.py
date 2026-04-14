@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -30,13 +31,25 @@ from genesis import run_genesis
 from bridge import run_bridge
 from generate import DEFAULT_CONFIG, compile_jsonl, run_generation
 
+AGENT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def validate_agent_id(agent_id: str) -> None:
+    if not AGENT_ID_RE.match(agent_id):
+        print(
+            f"Error: agent_id '{agent_id}' is invalid. "
+            f"Allowed characters: letters, digits, underscore, hyphen.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser(
         description="Simic — transcript to simulated agent (prompt + optional fine-tune).",
         usage="simic.py <transcript.md> --agent-id <id> [--finetune] [options]",
     )
-    parser.add_argument("file", type=Path, help="Path to hand-cleaned transcript (.md)")
+    parser.add_argument("file", type=Path, nargs="?", help="Path to hand-cleaned transcript (.md). Required unless --compile is passed.")
     parser.add_argument("--agent-id", required=True, help="Agent identifier")
 
     # Stage 1 pass-through
@@ -56,10 +69,14 @@ def main():
     parser.add_argument("--compile", action="store_true", help="Stage 3: compile existing batches into JSONL then exit")
 
     args = parser.parse_args()
+    validate_agent_id(args.agent_id)
 
     if args.compile:
         compile_jsonl(args.agent_id)
         return
+
+    if args.file is None:
+        parser.error("the 'file' argument is required (unless --compile is passed)")
 
     # Stage 1: genesis
     print("\n" + "="*60)

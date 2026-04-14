@@ -21,6 +21,8 @@ import argparse
 import asyncio
 import json
 import os
+import re
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +37,18 @@ try:
     import httpx
 except ImportError:
     httpx = None
+
+AGENT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def validate_agent_id(agent_id: str) -> None:
+    if not AGENT_ID_RE.match(agent_id):
+        print(
+            f"Error: agent_id '{agent_id}' is invalid. "
+            f"Allowed characters: letters, digits, underscore, hyphen.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 # ============================================================
@@ -193,41 +207,53 @@ class ProgressDB:
 # ============================================================
 
 def plan_batches(taxonomy: dict, batch_size: int) -> list:
-    """Break each category into batches of `batch_size` pairs."""
+    """Break each category into batches and substitute runtime placeholders.
+
+    The bridge-generated category prompts must contain literal `{count}` and
+    `{batch_info}` placeholders. This function populates them per-batch.
+    """
     batches = []
     for category in taxonomy["categories"]:
         cat_id = category["id"]
         target = category["target_pairs"]
         num_batches = (target + batch_size - 1) // batch_size
 
+        template = category["prompt"]
+        for placeholder in ("{count}", "{batch_info}"):
+            if placeholder not in template:
+                print(
+                    f"Error: taxonomy prompt for category {cat_id} is missing required "
+                    f"placeholder {placeholder!r}. Re-run bridge.py to regenerate the taxonomy.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
         for i in range(num_batches):
             pairs_in_batch = min(batch_size, target - i * batch_size)
             batch_id = f"{cat_id}_batch_{i:03d}"
 
-            prompt = category["prompt"]
-            prompt = prompt.replace(
-                "generate 10 question-answer pairs",
-                f"generate {pairs_in_batch} question-answer pairs"
-            ).replace(
-                "generate 10 SHORT conversational exchanges",
-                f"generate {pairs_in_batch} SHORT conversational exchanges"
-            ).replace(
-                "generate 5 MULTI-TURN conversations",
-                f"generate {pairs_in_batch} MULTI-TURN conversations"
-            ).replace(
-                "generate 10 factual question-answer pairs",
-                f"generate {pairs_in_batch} factual question-answer pairs"
-            )
-
+            batch_info = ""
             if num_batches > 1:
-                prompt += (
-                    f"\n\nIMPORTANT: This is batch {i+1} of {num_batches} for this "
-                    f"category. Previous batches have already covered some scenarios. "
-                    f"Generate COMPLETELY DIFFERENT questions and scenarios than what "
-                    f"a previous batch might have produced. Be creative and varied — "
-                    f"explore edge cases, unusual angles, and specific situations. "
-                    f"Do NOT repeat common or obvious questions."
+                batch_info = (
+                    f"IMPORTANT: This is batch {i+1} of {num_batches} for this category. "
+                    f"Previous batches have already covered some scenarios. Generate COMPLETELY "
+                    f"DIFFERENT questions and scenarios than what a previous batch might have "
+                    f"produced. Be creative and varied — explore edge cases, unusual angles, "
+                    f"and specific situations. Do NOT repeat common or obvious questions."
                 )
+
+            try:
+                prompt = category["prompt"].format(
+                    count=pairs_in_batch,
+                    batch_info=batch_info,
+                )
+            except (KeyError, IndexError) as e:
+                print(
+                    f"Error: taxonomy prompt for category {cat_id} is missing a required "
+                    f"placeholder ({e}). Re-run bridge.py to regenerate the taxonomy.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
             batches.append({
                 "batch_id": batch_id,
@@ -351,7 +377,7 @@ async def call_api(
                 wait_time = config["retry_delay_seconds"] * (2 ** attempt)
                 await asyncio.sleep(wait_time)
 
-        raise Exception(f"All {config['retry_attempts']} attempts failed")
+        raise RuntimeError(f"All {config['retry_attempts']} attempts failed")
 
 
 # ============================================================
@@ -436,6 +462,7 @@ async def process_batch(
 
 
 async def run_generation(agent_id: str, config: dict):
+    validate_agent_id(agent_id)
     if httpx is None:
         print("ERROR: httpx is required. Install it: pip install httpx")
         return
@@ -545,6 +572,7 @@ async def run_generation(agent_id: str, config: dict):
 # ============================================================
 
 def compile_jsonl(agent_id: str):
+    validate_agent_id(agent_id)
     paths = agent_paths(agent_id)
     db = ProgressDB(paths["db_dir"])
     output_dir = paths["output_dir"]
@@ -590,6 +618,7 @@ def compile_jsonl(agent_id: str):
 # ============================================================
 
 def show_status(agent_id: str, config: dict):
+    validate_agent_id(agent_id)
     paths = agent_paths(agent_id)
     if not paths["taxonomy"].exists():
         print(f"No taxonomy for agent '{agent_id}'. Run the bridge first.")
@@ -655,6 +684,7 @@ def main():
     parser.add_argument("--category", type=str, help="Run only a specific category (e.g. A1)")
 
     args = parser.parse_args()
+    validate_agent_id(args.agent_id)
 
     config = dict(DEFAULT_CONFIG)
     if args.model:

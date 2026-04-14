@@ -11,6 +11,13 @@ Approach: two parallel Claude Sonnet calls.
   Call A: system_prompt (JSONL persona) + frontier_approach (rich inference-time prompt)
   Call B: per-category behavioral_anchors + generation prompts for all 25 categories
 
+Template protocol for generated category prompts:
+  The LLM's generated prompt strings MUST contain two literal placeholders:
+    {count}       — substituted by Stage 3 with the number of pairs per batch
+    {batch_info}  — substituted by Stage 3 with anti-repetition text for later batches
+  Fixed values (first name, category domain, scenario lists, response length percentages)
+  are baked into each prompt directly by the LLM — they do not vary per batch.
+
 Usage:
     python bridge.py --agent-id alex_chen
 """
@@ -20,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -30,11 +38,22 @@ from dotenv import load_dotenv
 
 SONNET = "claude-sonnet-4-5"
 TAXONOMY_TEMPLATE = Path("prompts") / "category_taxonomy_template.json"
+AGENT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def validate_agent_id(agent_id: str) -> None:
+    if not AGENT_ID_RE.match(agent_id):
+        print(
+            f"Error: agent_id '{agent_id}' is invalid. "
+            f"Allowed characters: letters, digits, underscore, hyphen.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
 
 def latest_memory_file(agent_id: str) -> Path:
     candidates = sorted(Path("memory").glob(f"{agent_id}_*_memory.md"))
@@ -55,16 +74,28 @@ def strip_json_fences(text: str) -> str:
     return text.strip()
 
 
-def parse_json_response(text: str, label: str) -> dict:
+def parse_json_response(text: str, label: str, agent_id: str) -> dict:
+    """Parse JSON from a model response. On failure, dump raw text and raise."""
     try:
         return json.loads(strip_json_fences(text))
     except json.JSONDecodeError as e:
-        print(f"Error: could not parse JSON from {label} call: {e}", file=sys.stderr)
-        # Dump raw for debugging
-        debug_path = Path(f"bridge_debug_{label}.txt")
+        debug_dir = Path("agent_configs") / agent_id
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        debug_path = debug_dir / f"bridge_debug_{label}.txt"
         debug_path.write_text(text)
-        print(f"  Raw response written to {debug_path}", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(
+            f"Could not parse JSON from {label} response ({e}). "
+            f"Raw output dumped to {debug_path}"
+        ) from e
+
+
+def fill(template: str, **subs: str) -> str:
+    """Substitute <<KEY>> placeholders in a template. Does not interact with
+    Python .format() — so the template can contain literal { } without escaping."""
+    out = template
+    for key, value in subs.items():
+        out = out.replace(f"<<{key}>>", value)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +106,7 @@ PROMPTS_CALL_A = """You are adapting a person-specific fine-tuning harness to a 
 
 === AGENT MEMORY FILE ===
 
-{memory_text}
+<<MEMORY>>
 
 === YOUR TASK ===
 
@@ -94,7 +125,7 @@ Produce ONE JSON object with exactly two top-level keys: "system_prompt" and "fr
 
 HARD RULES:
 - Every claim must be grounded in the memory file. No invented facts.
-- Every behavioral anchor must cite specific evidence: amounts (₹, $), names of people, named brands, concrete incidents.
+- Every behavioral anchor must cite specific evidence: amounts (currency + number), names of people, named brands, concrete incidents.
 - Match the voice of this specific person, not a generic agent tone.
 - Output ONLY raw JSON. No markdown fences. No preamble.
 """
@@ -108,30 +139,27 @@ PROMPTS_CALL_B = """You are generating per-category fine-tuning data prompts for
 
 === AGENT MEMORY FILE ===
 
-{memory_text}
+<<MEMORY>>
 
 === CATEGORIES (structural — do not change) ===
 
 You will produce a generation prompt for each of these 25 categories. For each, output (1) behavioral_anchors specific to that category, and (2) a full generation prompt the data-generator model will receive.
 
-{category_list}
+<<CATEGORIES>>
 
 === YOUR TASK ===
 
-Produce ONE JSON object with a single top-level key "categories", mapping category_id to this shape:
+Produce ONE JSON object with a single top-level key "categories", mapping each category_id to an object with this shape:
 
-{{
-  "A1": {{
-    "behavioral_anchors": ["string", ...],   // 6-10 anchors specific to this category, each citing evidence
-    "prompt": "string"                        // the full generation prompt, see template below
-  }},
-  "A2": {{ ... }},
-  ...
-}}
+  {"A1": {"behavioral_anchors": ["string", ...], "prompt": "string"}, "A2": {...}, ...}
 
-=== PROMPT TEMPLATE (follow this shape for each category's "prompt") ===
+You MUST produce an entry for all 25 categories listed above. Missing categories will cause the pipeline to abort.
 
-"You are generating fine-tuning data to replicate [FIRST_NAME] as an AI agent. Using the memory file provided as system context, generate 10 question-answer pairs where someone asks [FIRST_NAME] about [CATEGORY_DOMAIN].
+=== PROMPT TEMPLATE ===
+
+Each generated "prompt" string must follow this shape exactly (the [SQUARE_BRACKET] parts are the parts you fill in based on the memory file and category; the {CURLY_BRACE} parts are placeholders that MUST appear verbatim in your output — do NOT replace them):
+
+"You are generating fine-tuning data to replicate [FIRST_NAME] as an AI agent. Using the memory file provided as system context, generate {count} question-answer pairs where someone asks [FIRST_NAME] about [CATEGORY_DOMAIN].
 
 Scenario types to cover:
 - [scenario 1 — situational, specific, varied]
@@ -144,24 +172,35 @@ Scenario types to cover:
 CRITICAL RULES:
 - All answers must be first-person, in [FIRST_NAME]'s natural voice
 - Include reasoning process, not just conclusion
-- Reference real patterns from their life: [3-5 category-specific anchors, e.g. 'asking Sarah for recommendations', 'using their Amex for groceries', 'avoiding subscriptions']
-- Some answers should be short (1-2 sentences), others detailed walkthroughs (per response_length_distribution)
+- Reference real patterns from their life: [3-5 category-specific anchors grounded in the memory file]
+- Some answers should be short (1-2 sentences), others detailed walkthroughs
 - Match their verbal tics and analogies
 - Be matter-of-fact, not preachy — state what they'd do and why
 
-Response length distribution for this category: short {short_pct}%, medium {medium_pct}%, long {long_pct}%.
+Response length distribution for this category: short [SHORT]%, medium [MEDIUM]%, long [LONG]% (substitute actual percentages from the metadata above).
+
+{batch_info}
 
 Output as a JSON object with key 'pairs' containing an array of objects, each with 'question' and 'answer' fields."
 
-(For the multi-turn category where is_multiturn is true, replace "10 question-answer pairs" with "5 multi-turn conversations", and replace the output schema with 'conversations' containing objects each with a 'turns' array of {{role, content}} objects. role may be 'user' or 'assistant'.)
+=== PLACEHOLDER PROTOCOL — CRITICAL ===
+
+In each generated "prompt" string:
+- {count} MUST appear verbatim where the pair count goes. Do NOT write "10" or any number there. The downstream pipeline substitutes it at runtime.
+- {batch_info} MUST appear verbatim on its own paragraph near the end (before "Output as a JSON object..."). Do NOT omit or rename.
+- Do NOT use any other single-curly-brace tokens in the prompt. If you need a literal curly brace in the text, double it ({{ or }}).
+
+=== MULTI-TURN CATEGORY (is_multiturn=true) ===
+
+For the multi-turn category, the prompt should ask for {count} multi-turn conversations (not Q&A pairs). The output schema should be: 'conversations' containing objects each with a 'turns' array of objects with 'role' and 'content' fields. 'role' must be 'user' or 'assistant'. The {count} and {batch_info} placeholders still appear verbatim.
 
 === RULES ===
 
 - Substitute [FIRST_NAME] with the actual first name from the memory file.
-- Substitute [CATEGORY_DOMAIN] with a natural English phrase for the category (e.g. A1 electronics → "buying electronics or tech products"; E2 values_religion_spirituality → "religion, spirituality, and belief").
-- Fill [3-5 category-specific anchors] with specific grounded references from THIS person's memory file for THIS category.
-- Fill response_length_distribution percentages from the category metadata provided above.
-- Scenario types must be RELEVANT to both the category AND this specific person. Avoid scenarios the transcript gives no signal about.
+- Substitute [CATEGORY_DOMAIN] with a natural English phrase for the category (e.g. A1 electronics → "buying electronics or tech products").
+- Fill scenario types with 5-7 situations relevant to both this category AND this specific person. Avoid scenarios the memory file gives no signal about.
+- Fill the anchor references with 3-5 real patterns from the memory file for this specific category.
+- Fill response length percentages from the category metadata above.
 - Every behavioral_anchor cites specific evidence: amounts, names of people, named brands, incidents.
 - Output ONLY raw JSON. No markdown fences. No preamble.
 """
@@ -171,69 +210,90 @@ Output as a JSON object with key 'pairs' containing an array of objects, each wi
 # Calls
 # ---------------------------------------------------------------------------
 
-def call_a(client: Anthropic, memory_text: str) -> dict:
+def call_a(client: Anthropic, memory_text: str, agent_id: str) -> dict:
     print("  [A] system_prompt + frontier_approach...")
     start = time.time()
     response = client.messages.create(
         model=SONNET,
         max_tokens=8000,
-        messages=[{"role": "user", "content": PROMPTS_CALL_A.format(memory_text=memory_text)}],
+        messages=[{"role": "user", "content": fill(PROMPTS_CALL_A, MEMORY=memory_text)}],
     )
     text = response.content[0].text
     elapsed = time.time() - start
     print(f"  [A] done in {elapsed:.0f}s ({response.usage.input_tokens:,} in / {response.usage.output_tokens:,} out)")
-    return parse_json_response(text, "call_a")
+    return parse_json_response(text, "call_a", agent_id)
 
 
-def call_b(client: Anthropic, memory_text: str, template: dict) -> dict:
+def call_b(client: Anthropic, memory_text: str, template: dict, agent_id: str) -> dict:
     category_list = "\n".join(
         f"- {c['id']} {c['name']} ({c['description']}) — target_pairs={c['target_pairs']}, "
         f"distribution={c['response_length_distribution']}, is_multiturn={c.get('is_multiturn', False)}"
         for c in template["categories"]
     )
+    content = fill(PROMPTS_CALL_B, MEMORY=memory_text, CATEGORIES=category_list)
     print("  [B] per-category anchors + prompts...")
     start = time.time()
     response = client.messages.create(
         model=SONNET,
         max_tokens=16000,
-        messages=[{
-            "role": "user",
-            "content": PROMPTS_CALL_B.format(memory_text=memory_text, category_list=category_list),
-        }],
+        messages=[{"role": "user", "content": content}],
     )
     text = response.content[0].text
     elapsed = time.time() - start
     print(f"  [B] done in {elapsed:.0f}s ({response.usage.input_tokens:,} in / {response.usage.output_tokens:,} out)")
-    return parse_json_response(text, "call_b")
+    return parse_json_response(text, "call_b", agent_id)
 
 
 # ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
 
+def _validate_placeholder(prompt: str, placeholder: str, cid: str) -> str | None:
+    """Return an error string if the placeholder isn't present verbatim in the prompt."""
+    if placeholder not in prompt:
+        return f"  {cid}: generated prompt is missing '{placeholder}' placeholder"
+    return None
+
+
 def assemble_taxonomy(template: dict, per_category: dict) -> dict:
+    """Merge template metadata with per-category LLM output. Hard-fail on gaps."""
     categories = []
     missing = []
+    errors = []
     for c in template["categories"]:
         cid = c["id"]
         generated = per_category.get("categories", {}).get(cid)
         if not generated:
             missing.append(cid)
             continue
+        prompt = generated.get("prompt", "")
+        anchors = generated.get("behavioral_anchors", [])
+        for placeholder in ("{count}", "{batch_info}"):
+            err = _validate_placeholder(prompt, placeholder, cid)
+            if err:
+                errors.append(err)
+        if not anchors:
+            errors.append(f"  {cid}: no behavioral_anchors produced")
         categories.append({
             **c,
-            "behavioral_anchors": generated.get("behavioral_anchors", []),
-            "prompt": generated.get("prompt", ""),
+            "behavioral_anchors": anchors,
+            "prompt": prompt,
         })
 
     if missing:
-        print(f"  WARNING: bridge did not produce entries for: {missing}", file=sys.stderr)
+        print(f"Error: bridge did not produce entries for categories: {missing}", file=sys.stderr)
+        print("  Re-run the bridge. The LLM must cover all 25 categories.", file=sys.stderr)
+        sys.exit(1)
+
+    if errors:
+        print("Error: generated taxonomy failed protocol validation:", file=sys.stderr)
+        for e in errors:
+            print(e, file=sys.stderr)
+        print("  Re-run the bridge. Generated prompts must contain {count} and {batch_info} placeholders.", file=sys.stderr)
+        sys.exit(1)
 
     return {
-        "metadata": {
-            **template.get("metadata", {}),
-            "bridge_version": "1.0",
-        },
+        **template.get("metadata", {}),
         "categories": categories,
     }
 
@@ -242,27 +302,16 @@ def write_configs(agent_id: str, call_a_result: dict, taxonomy: dict) -> None:
     config_dir = Path("agent_configs") / agent_id
     config_dir.mkdir(parents=True, exist_ok=True)
 
-    # system_prompt.json
     sp_path = config_dir / "system_prompt.json"
     sp_path.write_text(json.dumps(
         {"system_prompt": call_a_result["system_prompt"]}, indent=2, ensure_ascii=False
     ))
     print(f"  Wrote {sp_path}")
 
-    # frontier_approach_prompt.json
     fa_path = config_dir / "frontier_approach_prompt.json"
-    fa_path.write_text(json.dumps({
-        "metadata": {
-            "version": "1.0",
-            "purpose": "Rich inference-time system prompt for the frontier baseline or for testing the fine-tuned model with a richer persona.",
-            "usage": "Load this file, assemble sections into a system prompt, and append the memory file if desired.",
-            "notes": "Generated by simic bridge from the memory file.",
-        },
-        **call_a_result["frontier_approach"],
-    }, indent=2, ensure_ascii=False))
+    fa_path.write_text(json.dumps(call_a_result["frontier_approach"], indent=2, ensure_ascii=False))
     print(f"  Wrote {fa_path}")
 
-    # taxonomy.json
     tax_path = config_dir / "taxonomy.json"
     tax_path.write_text(json.dumps(taxonomy, indent=2, ensure_ascii=False))
     print(f"  Wrote {tax_path}")
@@ -273,6 +322,7 @@ def write_configs(agent_id: str, call_a_result: dict, taxonomy: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def run_bridge(agent_id: str) -> None:
+    validate_agent_id(agent_id)
     load_dotenv()
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -280,13 +330,12 @@ def run_bridge(agent_id: str) -> None:
         sys.exit(1)
 
     memory_path = latest_memory_file(agent_id)
-    template_path = TAXONOMY_TEMPLATE
-    if not template_path.exists():
-        print(f"Error: taxonomy template missing at {template_path}", file=sys.stderr)
+    if not TAXONOMY_TEMPLATE.exists():
+        print(f"Error: taxonomy template missing at {TAXONOMY_TEMPLATE}", file=sys.stderr)
         sys.exit(1)
 
     memory_text = memory_path.read_text(encoding="utf-8")
-    template = json.loads(template_path.read_text())
+    template = json.loads(TAXONOMY_TEMPLATE.read_text())
 
     print(f"Agent: {agent_id}")
     print(f"Memory: {memory_path} ({len(memory_text):,} chars)")
@@ -296,10 +345,25 @@ def run_bridge(agent_id: str) -> None:
 
     pipeline_start = time.time()
     with ThreadPoolExecutor(max_workers=2) as executor:
-        fut_a = executor.submit(call_a, client, memory_text)
-        fut_b = executor.submit(call_b, client, memory_text, template)
-        call_a_result = fut_a.result()
-        call_b_result = fut_b.result()
+        fut_a = executor.submit(call_a, client, memory_text, agent_id)
+        fut_b = executor.submit(call_b, client, memory_text, template, agent_id)
+
+        errors = []
+        call_a_result = None
+        call_b_result = None
+        try:
+            call_a_result = fut_a.result()
+        except Exception as e:
+            errors.append(f"Call A failed: {e}")
+        try:
+            call_b_result = fut_b.result()
+        except Exception as e:
+            errors.append(f"Call B failed: {e}")
+
+    if errors:
+        for err in errors:
+            print(f"Error: {err}", file=sys.stderr)
+        sys.exit(1)
 
     taxonomy = assemble_taxonomy(template, call_b_result)
     write_configs(agent_id, call_a_result, taxonomy)

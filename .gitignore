@@ -4,7 +4,6 @@
 
 # Per-agent outputs (user data, regenerable)
 memory/
-expert_notes/
 db/
 output/
 agent_configs/
