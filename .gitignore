@@ -1,0 +1,38 @@
+# Secrets
+.env
+.env.local
+
+# Per-agent outputs (user data, regenerable)
+memory/
+expert_notes/
+db/
+output/
+agent_configs/
+
+# Keep transcripts/ tracked so sample synthetic transcripts ship with the repo.
+# Per-agent processed copies live alongside the originals but are identical,
+# so nothing to exclude.
+
+# Database
+history.db*
+
+# Bridge debugging
+bridge_debug_*.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+env/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
