@@ -8,10 +8,6 @@ Given an interview transcript of a real human, Simic produces either:
 1. **A prompt-engineered agent** (fast, cheap) - a memory file loaded as context at query time, or
 2. **A synthetic dataset for fine-tuning** (slow, expensive) - a JSONL that trains a model to be the person at the weight level.
 
-Both approaches take the same input (a transcript) and share Stage 1. You choose how deep to go.
-
-## The Two Approaches
-
 ### Approach A - prompt + memory file
 - **Stage 1 only.** Four expert personas (psychologist, consumer behavior, cultural-demographic, social network) analyze the transcript in parallel. Their observations are compressed into a system prompt and packaged with the transcript into a single memory file. `serve.py` loads memory files and exposes a FastAPI endpoint that sends `{system: memory_file, user: question}` to Claude.
 - **Cost:** ~6 API calls per agent, ~1 minute, a few cents.
