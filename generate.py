@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simic Stage 3 — Synthetic fine-tune data generator.
+"""Simic Stage 3 - Synthetic fine-tune data generator.
 
 Takes a per-agent memory file + per-agent taxonomy (produced by bridge.py)
 and generates a JSONL training dataset to fine-tune a model to be this person.
@@ -52,7 +52,7 @@ def validate_agent_id(agent_id: str) -> None:
 
 
 # ============================================================
-# CONFIG — defaults. Override via CLI.
+# CONFIG - defaults. Override via CLI.
 # ============================================================
 
 DEFAULT_CONFIG = {
@@ -238,7 +238,7 @@ def plan_batches(taxonomy: dict, batch_size: int) -> list:
                     f"IMPORTANT: This is batch {i+1} of {num_batches} for this category. "
                     f"Previous batches have already covered some scenarios. Generate COMPLETELY "
                     f"DIFFERENT questions and scenarios than what a previous batch might have "
-                    f"produced. Be creative and varied — explore edge cases, unusual angles, "
+                    f"produced. Be creative and varied - explore edge cases, unusual angles, "
                     f"and specific situations. Do NOT repeat common or obvious questions."
                 )
 
@@ -314,7 +314,7 @@ async def call_api(
     if not config.get("json_mode"):
         effective_prompt += (
             "\n\nIMPORTANT: Respond ONLY with a valid JSON object. "
-            "No markdown fences, no preamble, no explanation — just the raw JSON."
+            "No markdown fences, no preamble, no explanation - just the raw JSON."
         )
 
     async with semaphore:
@@ -449,16 +449,16 @@ async def process_batch(
 
         if not pairs:
             db.mark_batch_failed(batch_id, "No pairs extracted from response")
-            print(f"  ✗ {batch_id} — no pairs extracted")
+            print(f"  ✗ {batch_id} - no pairs extracted")
             return
 
         db.save_batch_data(batch_id, pairs)
         db.mark_batch_done(batch_id, len(pairs))
-        print(f"  ✓ {batch_id} — {len(pairs)} pairs")
+        print(f"  ✓ {batch_id} - {len(pairs)} pairs")
 
     except Exception as e:
         db.mark_batch_failed(batch_id, str(e))
-        print(f"  ✗ {batch_id} — {e}")
+        print(f"  ✗ {batch_id} - {e}")
 
 
 async def run_generation(agent_id: str, config: dict):
@@ -632,7 +632,7 @@ def show_status(agent_id: str, config: dict):
     overall = db.get_stats()
 
     print(f"\n{'='*65}")
-    print(f"  SIMIC GENERATION STATUS — {agent_id}")
+    print(f"  SIMIC GENERATION STATUS - {agent_id}")
     print(f"{'='*65}")
     print(f"  Total pairs generated: {overall['total_pairs_generated']}")
     print(f"  Batches done/total: {overall['done']}/{len(all_batches)}")
@@ -669,7 +669,7 @@ def show_status(agent_id: str, config: dict):
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Simic Stage 3 — Fine-tune data generator")
+    parser = argparse.ArgumentParser(description="Simic Stage 3 - Fine-tune data generator")
     parser.add_argument("--agent-id", required=True, help="Agent identifier")
     parser.add_argument("--status", action="store_true", help="Show generation progress")
     parser.add_argument("--compile", action="store_true", help="Compile batches into JSONL")

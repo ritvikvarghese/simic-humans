@@ -1,4 +1,4 @@
-"""Simic API — serves pre-generated agent memory files as callable agents.
+"""Simic API - serves pre-generated agent memory files as callable agents.
 
 Loads memory files from memory/ at startup, exposes REST + SSE endpoints
 for querying agents individually or all in parallel via the Claude API.
@@ -44,12 +44,12 @@ QUERY_TIMEOUT = 60.0
 
 BRIEF_INSTRUCTION = (
     "Answer in 2-3 sentences. Be direct, no preamble. "
-    "Write in plain text only — no markdown, no headers, no bullet points, no bold or italic."
+    "Write in plain text only - no markdown, no headers, no bullet points, no bold or italic."
 )
 
 SCENARIO_GUARD = (
     "Important: If the question mentions unnamed people ('a friend', 'your partner', "
-    "'someone you trust', 'a colleague'), treat them as generic — do not assume they are "
+    "'someone you trust', 'a colleague'), treat them as generic - do not assume they are "
     "a specific person from your life unless explicitly named."
 )
 
@@ -160,7 +160,7 @@ async def lifespan(app: FastAPI):
     global AGENTS, client, semaphore
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        log.error("ANTHROPIC_API_KEY not set — queries will fail")
+        log.error("ANTHROPIC_API_KEY not set - queries will fail")
     client = AsyncAnthropic(max_retries=2)
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
     AGENTS = load_memory_files()

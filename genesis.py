@@ -1,4 +1,4 @@
-"""Simic Stage 1 — genesis: single-command agent memory pipeline.
+"""Simic Stage 1 - genesis: single-command agent memory pipeline.
 
 Takes a hand-cleaned interview transcript and produces a complete agent memory:
   - System prompt (summary cache)
@@ -263,7 +263,7 @@ def count_observations(text: str) -> int:
 def assemble_memory(agent_id: str, body: str, expert_results: list,
                     gaps_result: dict | None, cache_result: dict | None,
                     today: str, demographics: dict | None = None) -> str:
-    """Build the memory/ file — the complete agent memory.
+    """Build the memory/ file - the complete agent memory.
 
     Ordering: YAML frontmatter → system prompt → transcript → expert notes → gaps.
     """
@@ -274,7 +274,7 @@ def assemble_memory(agent_id: str, body: str, expert_results: list,
         parts.append(yaml.dump(demographics, default_flow_style=False, allow_unicode=True, sort_keys=False).rstrip())
         parts.append("---\n")
 
-    parts.append(f"# Agent Memory — {agent_id}\n")
+    parts.append(f"# Agent Memory - {agent_id}\n")
     parts.append(f"Generated: {today}")
     parts.append(f"Last updated: {today}")
     parts.append("\n---\n")
@@ -374,7 +374,7 @@ def run_genesis(transcript_path: Path, agent_id: str, skip_gaps: bool = False,
             print(f"  WARNING: {w}", file=sys.stderr)
 
     elapsed = time.time() - pipeline_start
-    print(f"\nDone in {elapsed:.0f}s — {total_obs} observations")
+    print(f"\nDone in {elapsed:.0f}s - {total_obs} observations")
 
     memory_path = Path("memory") / f"{agent_id}_{today}_memory.md"
     memory_path.parent.mkdir(exist_ok=True)

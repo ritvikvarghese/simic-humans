@@ -1,8 +1,8 @@
-"""Simic — unified CLI for the three-stage pipeline.
+"""Simic - unified CLI for the three-stage pipeline.
 
-Stage 1: genesis      — transcript → memory file (the simagent)
-Stage 2: bridge       — memory file → per-agent fine-tune configs
-Stage 3: generate     — configs + memory → JSONL fine-tune dataset
+Stage 1: genesis      - transcript → memory file (the simagent)
+Stage 2: bridge       - memory file → per-agent fine-tune configs
+Stage 3: generate     - configs + memory → JSONL fine-tune dataset
 
 Default: Stage 1 only (fast, ~1 min, produces a working prompt-engineered agent).
 --finetune: all three stages (slow, ~2600 API calls for stage 3, produces JSONL).
@@ -46,7 +46,7 @@ def validate_agent_id(agent_id: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Simic — transcript to simulated agent (prompt + optional fine-tune).",
+        description="Simic - transcript to simulated agent (prompt + optional fine-tune).",
         usage="simic.py <transcript.md> --agent-id <id> [--finetune] [options]",
     )
     parser.add_argument("file", type=Path, nargs="?", help="Path to hand-cleaned transcript (.md). Required unless --compile is passed.")
@@ -80,7 +80,7 @@ def main():
 
     # Stage 1: genesis
     print("\n" + "="*60)
-    print(" STAGE 1 — genesis")
+    print(" STAGE 1 - genesis")
     print("="*60)
     memory_path = run_genesis(
         transcript_path=args.file,
@@ -103,7 +103,7 @@ def main():
 
     # Stage 2: bridge
     print("\n" + "="*60)
-    print(" STAGE 2 — bridge")
+    print(" STAGE 2 - bridge")
     print("="*60)
     run_bridge(args.agent_id)
 
@@ -113,7 +113,7 @@ def main():
 
     # Stage 3: generate
     print("\n" + "="*60)
-    print(" STAGE 3 — generate fine-tune data")
+    print(" STAGE 3 - generate fine-tune data")
     print("="*60)
 
     load_dotenv()

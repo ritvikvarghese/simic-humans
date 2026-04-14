@@ -1,4 +1,4 @@
-"""Simic Stage 2 — Bridge.
+"""Simic Stage 2 - Bridge.
 
 Reads the memory file produced by Stage 1 (genesis) and generates the three
 person-specific config files that Stage 3 (generate) needs:
@@ -13,10 +13,10 @@ Approach: two parallel Claude Sonnet calls.
 
 Template protocol for generated category prompts:
   The LLM's generated prompt strings MUST contain two literal placeholders:
-    {count}       — substituted by Stage 3 with the number of pairs per batch
-    {batch_info}  — substituted by Stage 3 with anti-repetition text for later batches
+    {count}       - substituted by Stage 3 with the number of pairs per batch
+    {batch_info}  - substituted by Stage 3 with anti-repetition text for later batches
   Fixed values (first name, category domain, scenario lists, response length percentages)
-  are baked into each prompt directly by the LLM — they do not vary per batch.
+  are baked into each prompt directly by the LLM - they do not vary per batch.
 
 Usage:
     python bridge.py --agent-id alex_chen
@@ -91,7 +91,7 @@ def parse_json_response(text: str, label: str, agent_id: str) -> dict:
 
 def fill(template: str, **subs: str) -> str:
     """Substitute <<KEY>> placeholders in a template. Does not interact with
-    Python .format() — so the template can contain literal { } without escaping."""
+    Python .format() - so the template can contain literal { } without escaping."""
     out = template
     for key, value in subs.items():
         out = out.replace(f"<<{key}>>", value)
@@ -99,7 +99,7 @@ def fill(template: str, **subs: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Call A — system_prompt + frontier_approach
+# Call A - system_prompt + frontier_approach
 # ---------------------------------------------------------------------------
 
 PROMPTS_CALL_A = """You are adapting a person-specific fine-tuning harness to a specific human based on their memory file (system prompt + interview transcript + expert behavioral analysis).
@@ -112,16 +112,16 @@ PROMPTS_CALL_A = """You are adapting a person-specific fine-tuning harness to a 
 
 Produce ONE JSON object with exactly two top-level keys: "system_prompt" and "frontier_approach".
 
-1. "system_prompt" — a string. Written in second person starting with "You are [name]...". 1-2 compact paragraphs (roughly 200-350 words). This will be the "system" role in every fine-tuning training example, so every token is expensive — keep it dense and voice-establishing.
+1. "system_prompt" - a string. Written in second person starting with "You are [name]...". 1-2 compact paragraphs (roughly 200-350 words). This will be the "system" role in every fine-tuning training example, so every token is expensive - keep it dense and voice-establishing.
 
-2. "frontier_approach" — an object with these keys (all arrays of short strings unless stated):
+2. "frontier_approach" - an object with these keys (all arrays of short strings unless stated):
    - "persona": 2 lines establishing identity in first-person framing ("You are not an AI assistant. You are [name], a real...")
    - "objective": 3-4 lines defining the agent's job (extrapolate likely opinion/choice, not neutral menus)
    - "answer_shape": 4-6 lines on response length, structure, and hard caps
    - "decision_rules": 4-6 lines on when to commit vs hedge, how to use "it depends"
    - "reasoning_rules": 3-5 lines on how to reason (first principles, evidence hierarchy, etc.)
    - "voice_rules": 6-10 lines on voice, verbal tics, code-switching, analogies, tone
-   - "behavioral_anchors": an OBJECT mapping domain names (strings like "spending_and_purchases", "brand_loyalty", "trust_and_relationships", "career", "family", etc — you pick 8-12 domains that matter for THIS person) to arrays of 6-12 concrete anchor strings each. Every anchor must cite specific evidence from the memory file (names, amounts, incidents, brands).
+   - "behavioral_anchors": an OBJECT mapping domain names (strings like "spending_and_purchases", "brand_loyalty", "trust_and_relationships", "career", "family", etc - you pick 8-12 domains that matter for THIS person) to arrays of 6-12 concrete anchor strings each. Every anchor must cite specific evidence from the memory file (names, amounts, incidents, brands).
 
 HARD RULES:
 - Every claim must be grounded in the memory file. No invented facts.
@@ -132,7 +132,7 @@ HARD RULES:
 
 
 # ---------------------------------------------------------------------------
-# Call B — taxonomy (per-category anchors + prompts)
+# Call B - taxonomy (per-category anchors + prompts)
 # ---------------------------------------------------------------------------
 
 PROMPTS_CALL_B = """You are generating per-category fine-tuning data prompts for a specific person, based on their memory file.
@@ -141,7 +141,7 @@ PROMPTS_CALL_B = """You are generating per-category fine-tuning data prompts for
 
 <<MEMORY>>
 
-=== CATEGORIES (structural — do not change) ===
+=== CATEGORIES (structural - do not change) ===
 
 You will produce a generation prompt for each of these 25 categories. For each, output (1) behavioral_anchors specific to that category, and (2) a full generation prompt the data-generator model will receive.
 
@@ -157,12 +157,12 @@ You MUST produce an entry for all 25 categories listed above. Missing categories
 
 === PROMPT TEMPLATE ===
 
-Each generated "prompt" string must follow this shape exactly (the [SQUARE_BRACKET] parts are the parts you fill in based on the memory file and category; the {CURLY_BRACE} parts are placeholders that MUST appear verbatim in your output — do NOT replace them):
+Each generated "prompt" string must follow this shape exactly (the [SQUARE_BRACKET] parts are the parts you fill in based on the memory file and category; the {CURLY_BRACE} parts are placeholders that MUST appear verbatim in your output - do NOT replace them):
 
 "You are generating fine-tuning data to replicate [FIRST_NAME] as an AI agent. Using the memory file provided as system context, generate {count} question-answer pairs where someone asks [FIRST_NAME] about [CATEGORY_DOMAIN].
 
 Scenario types to cover:
-- [scenario 1 — situational, specific, varied]
+- [scenario 1 - situational, specific, varied]
 - [scenario 2]
 - [scenario 3]
 - [scenario 4]
@@ -175,7 +175,7 @@ CRITICAL RULES:
 - Reference real patterns from their life: [3-5 category-specific anchors grounded in the memory file]
 - Some answers should be short (1-2 sentences), others detailed walkthroughs
 - Match their verbal tics and analogies
-- Be matter-of-fact, not preachy — state what they'd do and why
+- Be matter-of-fact, not preachy - state what they'd do and why
 
 Response length distribution for this category: short [SHORT]%, medium [MEDIUM]%, long [LONG]% (substitute actual percentages from the metadata above).
 
@@ -183,7 +183,7 @@ Response length distribution for this category: short [SHORT]%, medium [MEDIUM]%
 
 Output as a JSON object with key 'pairs' containing an array of objects, each with 'question' and 'answer' fields."
 
-=== PLACEHOLDER PROTOCOL — CRITICAL ===
+=== PLACEHOLDER PROTOCOL - CRITICAL ===
 
 In each generated "prompt" string:
 - {count} MUST appear verbatim where the pair count goes. Do NOT write "10" or any number there. The downstream pipeline substitutes it at runtime.
@@ -226,7 +226,7 @@ def call_a(client: Anthropic, memory_text: str, agent_id: str) -> dict:
 
 def call_b(client: Anthropic, memory_text: str, template: dict, agent_id: str) -> dict:
     category_list = "\n".join(
-        f"- {c['id']} {c['name']} ({c['description']}) — target_pairs={c['target_pairs']}, "
+        f"- {c['id']} {c['name']} ({c['description']}) - target_pairs={c['target_pairs']}, "
         f"distribution={c['response_length_distribution']}, is_multiturn={c.get('is_multiturn', False)}"
         for c in template["categories"]
     )
@@ -374,7 +374,7 @@ def run_bridge(agent_id: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Simic Stage 2 — generate per-agent fine-tune configs from memory file",
+        description="Simic Stage 2 - generate per-agent fine-tune configs from memory file",
         usage="bridge.py --agent-id <id>",
     )
     parser.add_argument("--agent-id", required=True, help="Agent identifier (matches genesis output)")

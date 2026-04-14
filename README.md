@@ -2,23 +2,23 @@
 
 Can an AI agent convincingly replicate a specific real person? Simic is a multi-agent research project to see if it can be used to predict human choice and decisions for market research. 
 
-Two methodologies for replicating a specific person as an AI agent — unified pipeline.
+Two methodologies for replicating a specific person as an AI agent - unified pipeline.
 
 Given an interview transcript of a real human, Simic produces either:
-1. **A prompt-engineered agent** (fast, cheap) — a memory file loaded as context at query time, or
-2. **A synthetic dataset for fine-tuning** (slow, expensive) — a JSONL that trains a model to be the person at the weight level.
+1. **A prompt-engineered agent** (fast, cheap) - a memory file loaded as context at query time, or
+2. **A synthetic dataset for fine-tuning** (slow, expensive) - a JSONL that trains a model to be the person at the weight level.
 
 Both approaches take the same input (a transcript) and share Stage 1. You choose how deep to go.
 
 ## The Two Approaches
 
-### Approach A — prompt + memory file
+### Approach A - prompt + memory file
 - **Stage 1 only.** Four expert personas (psychologist, consumer behavior, cultural-demographic, social network) analyze the transcript in parallel. Their observations are compressed into a system prompt and packaged with the transcript into a single memory file. `serve.py` loads memory files and exposes a FastAPI endpoint that sends `{system: memory_file, user: question}` to Claude.
 - **Cost:** ~6 API calls per agent, ~1 minute, a few cents.
 - **Strength:** easy to iterate, voice fidelity preserved, works zero-shot on any transcript.
 - **Weakness:** context tax on every query, limited by the memory file quality, model is still Claude playing a role.
 
-### Approach B — fine-tune on synthetic Q&A
+### Approach B - fine-tune on synthetic Q&A
 - **Stages 1 + 2 + 3.** After genesis, a bridge script derives per-person fine-tune configs (system prompt, frontier inference prompt, 25-category generation taxonomy) from the memory file. A generator model (default: GLM-4.6 via Z.AI) then produces ~2,600 Q&A pairs across 25 behavioral categories. The output is an OpenAI-chat-format JSONL ready for fine-tuning.
 - **Cost:** ~2,600+ API calls per agent, hours, dollars.
 - **Strength:** no context tax at inference, voice baked into the weights, runs on your own infra.
@@ -47,7 +47,7 @@ cd simic
 pip install -r requirements.txt
 cp .env.example .env      # add your ANTHROPIC_API_KEY (and ZAI_API_KEY if fine-tuning)
 
-# 2. Produce a simagent (Approach A) — ~1 min, a few cents
+# 2. Produce a simagent (Approach A) - ~1 min, a few cents
 python simic.py transcripts/Arjun_DSouza.md --agent-id arjun_dsouza
 
 # 3. Query it
@@ -56,7 +56,7 @@ curl -X POST localhost:8000/query \
   -H 'Content-Type: application/json' \
   -d '{"query": "What would you do if you got a 2x raise?", "agent_ids": ["arjun_dsouza"]}'
 
-# 4. Or produce fine-tune data (Approach B) — hours, $5-20 per agent
+# 4. Or produce fine-tune data (Approach B) - hours, $5-20 per agent
 python simic.py transcripts/Arjun_DSouza.md --agent-id arjun_dsouza --finetune
 python simic.py transcripts/Arjun_DSouza.md --agent-id arjun_dsouza --compile
 # → output/arjun_dsouza/training_data.jsonl
@@ -101,7 +101,7 @@ transcript.md
 ```bash
 python simic.py <transcript> --agent-id <id> [options]
 
-# Stage 1 only (default — Approach A)
+# Stage 1 only (default - Approach A)
 python simic.py transcripts/alex.md --agent-id alex
 
 # All three stages (Approach B)
@@ -150,7 +150,7 @@ curl -X POST localhost:8000/query \
 
 ```
 
-Responses are brief (2-3 sentences, plain text) by design. For longer or structured answers, edit `serve.py`'s `BRIEF_INSTRUCTION` — the format-preset machinery was removed as speculative.
+Responses are brief (2-3 sentences, plain text) by design. For longer or structured answers, edit `serve.py`'s `BRIEF_INSTRUCTION` - the format-preset machinery was removed as speculative.
 
 ## Transcript Format
 
@@ -176,10 +176,10 @@ I wake up around 6:30, drink coffee while reading...
 ```
 
 **What makes a good transcript:**
-- Rich voice signal — verbal tics, how they actually talk, natural flow
-- Specific details — named brands, named people, amounts, dates, incidents
-- Contradictions — where stated beliefs and actual behavior diverge (experts latch onto these)
-- Depth over breadth — 60-90 min conversation is better than a wide survey
+- Rich voice signal - verbal tics, how they actually talk, natural flow
+- Specific details - named brands, named people, amounts, dates, incidents
+- Contradictions - where stated beliefs and actual behavior diverge (experts latch onto these)
+- Depth over breadth - 60-90 min conversation is better than a wide survey
 
 Place your own transcripts in `transcripts/`. The directory is tracked so you can commit synthetic samples alongside the code if you want them to ship with the repo.
 
@@ -195,7 +195,7 @@ simic/
 ├── serve.py                    # Stage 4: FastAPI over memory files (Approach A runtime)
 ├── prompts/
 │   └── category_taxonomy_template.json  # 25-category structural template (bridge fills it in)
-├── transcripts/                # User-provided transcripts (tracked — place samples here)
+├── transcripts/                # User-provided transcripts (tracked - place samples here)
 ├── memory/                     # Generated agent memories (gitignored, created at runtime)
 ├── agent_configs/              # Per-agent bridge output (gitignored, created at runtime)
 ├── db/                         # Per-agent stage 3 progress + raw batches (gitignored, created at runtime)
@@ -213,7 +213,7 @@ See `docs/RESEARCH.md` for the methodology deep-dive: what the two approaches ar
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
 
 ## Credits
 

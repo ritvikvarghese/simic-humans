@@ -7,7 +7,7 @@ Simic was a multi-agent research project to test that and see if it can be used 
 
 ## The two approaches
 
-### Approach A — prompt engineering over a rich memory file
+### Approach A - prompt engineering over a rich memory file
 
 1. Take a 60–90 minute interview transcript. 
 2. Run four expert personas in parallel (psychologist, consumer-behavior analyst, cultural-demographic analyst, social-network analyst). 
@@ -16,7 +16,7 @@ Simic was a multi-agent research project to test that and see if it can be used 
 
 At query time, load the memory file as the system prompt and send questions to Claude Sonnet. The model uses the memory to understand and answer questions you ask the agent. 
 
-### Approach B — fine-tune on synthetic Q&A grounded in the memory file
+### Approach B - fine-tune on synthetic Q&A grounded in the memory file
 
 Take the memory file from Approach A. A bridge script derives three person-specific artifacts from it:
 1. A short **system prompt** suitable for JSONL training (used as the `system` role in every training example)
