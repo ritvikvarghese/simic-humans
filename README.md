@@ -22,6 +22,20 @@ Both approaches take the same input (a transcript) and share Stage 1. You choose
 - **Strength:** no context tax at inference, voice baked into the weights, runs on your own infra.
 - **Weakness:** only as good as the synthetic data quality, requires hosting the fine-tuned model, harder to iterate.
 
+## Sample Transcripts
+
+Five synthetic interview transcripts are bundled in `transcripts/` so you can run the pipeline end-to-end without supplying your own data. Each is a 60–90 minute hand-cleaned interview with a fictional Indian consumer, chosen to span demographics, income brackets, and life stages:
+
+| File | Persona |
+|---|---|
+| `Arjun_DSouza.md` | Freelance video editor & YouTuber, Bengaluru (via Mangaluru), 3-6L, Catholic |
+| `Deepika_Kaur.md` | Product Marketing Manager at Zoho, Chennai, 15-25L, Sikh |
+| `Mohammed_Irfan.md` | Operations Manager at Lenskart, Hyderabad, 12-18L, Muslim |
+| `Priya_Sharma.md` | Junior Data Analyst at Razorpay, Bengaluru, 5-8L, Hindu |
+| `Rahul_Nambiar.md` | Franchise owner (Chai Point) + tutoring centre, Kochi, 8-15L, Hindu (Nair) |
+
+Use them as examples of the expected input format, or as a ready-to-run demo.
+
 ## Quickstart
 
 ```bash
@@ -31,20 +45,30 @@ cd simic
 pip install -r requirements.txt
 cp .env.example .env      # add your ANTHROPIC_API_KEY (and ZAI_API_KEY if fine-tuning)
 
-# 2. Produce a simagent (Approach A)
-python simic.py transcripts/alex_chen.md --agent-id alex_chen
+# 2. Produce a simagent (Approach A) — ~1 min, a few cents
+python simic.py transcripts/Arjun_DSouza.md --agent-id arjun_dsouza
 
 # 3. Query it
 uvicorn serve:app --reload
 curl -X POST localhost:8000/query \
   -H 'Content-Type: application/json' \
-  -d '{"query": "What would you do if you got a 2x raise?", "agent_ids": ["alex_chen"]}'
+  -d '{"query": "What would you do if you got a 2x raise?", "agent_ids": ["arjun_dsouza"]}'
 
-# 4. Or produce fine-tune data (Approach B)
-python simic.py transcripts/alex_chen.md --agent-id alex_chen --finetune
-python simic.py transcripts/alex_chen.md --agent-id alex_chen --compile
-# → output/alex_chen/training_data.jsonl
+# 4. Or produce fine-tune data (Approach B) — hours, $5-20 per agent
+python simic.py transcripts/Arjun_DSouza.md --agent-id arjun_dsouza --finetune
+python simic.py transcripts/Arjun_DSouza.md --agent-id arjun_dsouza --compile
+# → output/arjun_dsouza/training_data.jsonl
+
+# 5. Generate agents for all 5 samples at once (Approach A)
+for f in transcripts/*.md; do
+  id=$(basename "$f" .md | tr '[:upper:]' '[:lower:]')
+  python simic.py "$f" --agent-id "$id"
+done
+# Then: curl localhost:8000/agents  ← lists all 5
+# Or query all in parallel: curl -X POST localhost:8000/query -d '{"query":"..."}'
 ```
+
+**Naming convention:** the `--agent-id` is arbitrary but must be `[a-zA-Z0-9_-]+`. Lowercase snake-case is conventional (e.g., `arjun_dsouza`), and makes the memory filename predictable: `memory/<agent_id>_<date>_memory.md`.
 
 ## Pipeline Stages
 
