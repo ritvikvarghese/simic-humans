@@ -38,8 +38,8 @@ Use them as examples of the expected input format, or as a ready-to-run demo.
 
 ```bash
 # 1. Setup
-git clone [this repo]
-cd simic
+git clone https://github.com/ritvikvarghese/simic-humans.git
+cd simic-humans
 pip install -r requirements.txt
 cp .env.example .env      # add your ANTHROPIC_API_KEY (and ZAI_API_KEY if fine-tuning)
 
@@ -182,7 +182,7 @@ Place your own transcripts in `transcripts/`. The directory is tracked so you ca
 ## Directory Layout
 
 ```
-simic/
+simic-humans/
 ├── simic.py                    # Unified CLI (stages 1+2+3 wired together)
 ├── genesis.py                  # Stage 1: transcript → memory file
 ├── expert_prompts.py           # Prompts for the 4-expert panel + gaps + system prompt synth
