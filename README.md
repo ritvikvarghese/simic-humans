@@ -1,6 +1,6 @@
 # Simic
 
-Can an AI agent convincingly replicate a specific real person? Simic is a multi-agent research project to see if it can be used to predict human choice and decisions for market research. 
+Can an AI agent convincingly replicate a specific real person? simic humans is a multi-agent research project to see if it can be used to predict human choice and decisions for market research. 
 
 Two methodologies for replicating a specific person as an AI agent - unified pipeline.
 
@@ -11,18 +11,14 @@ Given an interview transcript of a real human, Simic produces either:
 ### Approach A - prompt + memory file
 - **Stage 1 only.** Four expert personas (psychologist, consumer behavior, cultural-demographic, social network) analyze the transcript in parallel. Their observations are compressed into a system prompt and packaged with the transcript into a single memory file. `serve.py` loads memory files and exposes a FastAPI endpoint that sends `{system: memory_file, user: question}` to Claude.
 - **Cost:** ~6 API calls per agent, ~1 minute, a few cents.
-- **Strength:** easy to iterate, voice fidelity preserved, works zero-shot on any transcript.
-- **Weakness:** context tax on every query, limited by the memory file quality, model is still Claude playing a role.
 
 ### Approach B - fine-tune on synthetic Q&A
 - **Stages 1 + 2 + 3.** After genesis, a bridge script derives per-person fine-tune configs (system prompt, frontier inference prompt, 25-category generation taxonomy) from the memory file. A generator model (default: GLM-4.6 via Z.AI) then produces ~2,600 Q&A pairs across 25 behavioral categories. The output is an OpenAI-chat-format JSONL ready for fine-tuning.
 - **Cost:** ~2,600+ API calls per agent, hours, dollars.
-- **Strength:** no context tax at inference, voice baked into the weights, runs on your own infra.
-- **Weakness:** only as good as the synthetic data quality, requires hosting the fine-tuned model, harder to iterate.
 
 ## Sample Transcripts
 
-Five synthetic interview transcripts are bundled in `transcripts/` so you can run the pipeline end-to-end without supplying your own data. Each is a 60–90 minute hand-cleaned interview with a fictional Indian consumer, chosen to span demographics, income brackets, and life stages:
+Five synthetic interview transcripts are bundled in `transcripts/` so you can run the pipeline end-to-end: 
 
 | File | Persona |
 |---|---|
@@ -31,8 +27,6 @@ Five synthetic interview transcripts are bundled in `transcripts/` so you can ru
 | `Mohammed_Irfan.md` | Operations Manager at Lenskart, Hyderabad, 12-18L, Muslim |
 | `Priya_Sharma.md` | Junior Data Analyst at Razorpay, Bengaluru, 5-8L, Hindu |
 | `Rahul_Nambiar.md` | Franchise owner (Chai Point) + tutoring centre, Kochi, 8-15L, Hindu (Nair) |
-
-Use them as examples of the expected input format, or as a ready-to-run demo.
 
 ## Quickstart
 
@@ -91,8 +85,6 @@ transcript.md
 ```
 
 ## CLI Reference
-
-### Unified entrypoint
 
 ```bash
 python simic.py <transcript> --agent-id <id> [options]
@@ -157,26 +149,19 @@ Example:
 ```markdown
 # Demographic intake:
 
-Full name: Alex Chen
-Currently live in: San Francisco, California
-Hometown: Taipei, Taiwan
-How old are you: 32
+Full name: Ritvik Varghese
+Currently live in: Bengaluru, Karnataka
+Hometown: Chennai, Tamil Nadu
+How old are you: 25
 Gender: male
 Marital status: single
 Occupation: senior product manager at a B2B SaaS company
-Languages: English, Mandarin
+Languages: English, Hindi, German, French
 
 # Q1. Walk me through a typical weekday.
 
 I wake up around 6:30, drink coffee while reading...
 ```
-
-**What makes a good transcript:**
-- Rich voice signal - verbal tics, how they actually talk, natural flow
-- Specific details - named brands, named people, amounts, dates, incidents
-- Contradictions - where stated beliefs and actual behavior diverge (experts latch onto these)
-- Depth over breadth - 60-90 min conversation is better than a wide survey
-
 Place your own transcripts in `transcripts/`. The directory is tracked so you can commit synthetic samples alongside the code if you want them to ship with the repo.
 
 ## Directory Layout
@@ -209,9 +194,3 @@ See [RESEARCH.md](RESEARCH.md) for the methodology deep-dive: what the two appro
 ## License
 
 MIT - see [LICENSE](LICENSE).
-
-## Credits
-
-Simic unifies two prior research projects into a single pipeline:
-- the prompt-engineered memory-file approach (Stage 1)
-- the synthetic fine-tune dataset approach (Stages 2 + 3)
